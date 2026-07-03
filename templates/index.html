@@ -1,0 +1,1047 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+<meta name="mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="theme-color" content="#0d1117"/>
+<title>FreshGuard — Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
+
+<!-- ── Mobile continuous running ── -->
+<script>
+  // 1. Keep-alive ping every 30s — prevents ngrok/browser from timing out
+  setInterval(function() {
+    fetch('/ping').catch(function(){});
+  }, 30000);
+
+  // 2. Screen Wake Lock — prevents phone screen from sleeping
+  var wakeLock = null;
+  async function requestWakeLock() {
+    try {
+      if ('wakeLock' in navigator) {
+        wakeLock = await navigator.wakeLock.request('screen');
+      }
+    } catch(e) {}
+  }
+  requestWakeLock();
+  // Re-acquire wake lock when tab becomes visible again
+  document.addEventListener('visibilitychange', function() {
+    if (document.visibilityState === 'visible') requestWakeLock();
+  });
+
+  // 3. Auto-reconnect: if server goes away briefly, reload when it comes back
+  var _serverLost = false;
+  setInterval(function() {
+    fetch('/ping')
+      .then(function() {
+        if (_serverLost) { _serverLost = false; location.reload(); }
+      })
+      .catch(function() { _serverLost = true; });
+  }, 15000);
+</script>
+<style>
+  :root{
+    --bg:#0d1117;--surface:#161b22;--surface2:#1c2330;--border:#30363d;
+    --text:#e6edf3;--muted:#7d8590;--green:#3fb950;--green-dim:#1a3a22;
+    --yellow:#d29922;--yellow-dim:#3a2e0a;--red:#f85149;--red-dim:#3a0f0d;
+    --accent:#58a6ff;--accent-dim:#0d2347;--purple:#bc8cff;--purple-dim:#2d1b69;
+    --orange:#f78166;--orange-dim:#3a1a0d;--teal:#39d353;--teal-dim:#0d2e1a;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;
+    background-image:radial-gradient(ellipse at 20% 0%,#0d2347 0%,transparent 50%),
+    radial-gradient(ellipse at 80% 100%,#1a3a22 0%,transparent 50%);}
+
+  /* ── Header ── */
+  header{padding:14px 28px;display:flex;align-items:center;justify-content:space-between;
+    border-bottom:1px solid var(--border);position:sticky;top:0;z-index:200;
+    background:rgba(13,17,23,0.95);backdrop-filter:blur(12px);}
+  .logo{font-family:'Syne',sans-serif;font-weight:800;font-size:1.25rem;display:flex;align-items:center;gap:9px;}
+  .logo-icon{width:30px;height:30px;background:linear-gradient(135deg,#3fb950,#58a6ff);border-radius:7px;display:grid;place-items:center;font-size:0.9rem;}
+  .header-right{display:flex;align-items:center;gap:12px;}
+  .user-pill{background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:5px 13px;font-size:0.78rem;display:flex;align-items:center;gap:6px;}
+  .notif-bell{position:relative;cursor:pointer;font-size:1.1rem;padding:4px;}
+  .notif-badge{position:absolute;top:-2px;right:-2px;background:var(--red);color:white;font-size:0.58rem;font-weight:700;width:15px;height:15px;border-radius:50%;display:grid;place-items:center;}
+  .logout-btn{background:none;border:1px solid var(--border);border-radius:8px;color:var(--muted);padding:5px 11px;font-size:0.76rem;cursor:pointer;text-decoration:none;transition:all 0.2s;}
+  .logout-btn:hover{border-color:var(--red);color:var(--red);}
+
+  /* ── Notification Panel ── */
+  .notif-panel{position:fixed;top:60px;right:20px;width:330px;background:var(--surface);border:1px solid var(--border);border-radius:14px;z-index:300;display:none;box-shadow:0 10px 40px rgba(0,0,0,0.5);animation:fadeUp 0.2s ease;}
+  .notif-panel.open{display:block;}
+  .notif-head{padding:12px 16px;border-bottom:1px solid var(--border);font-family:'Syne',sans-serif;font-size:0.83rem;font-weight:700;display:flex;justify-content:space-between;align-items:center;}
+  .notif-close{font-size:0.7rem;color:var(--muted);cursor:pointer;}
+  .notif-close:hover{color:var(--accent);}
+  .notif-list{max-height:300px;overflow-y:auto;padding:8px;}
+  .notif-item{padding:9px 12px;border-radius:8px;margin-bottom:5px;font-size:0.8rem;line-height:1.5;}
+  .notif-item.expired{background:var(--red-dim);border:1px solid rgba(248,81,73,0.25);color:#ffb3b0;}
+  .notif-item.expiring{background:var(--yellow-dim);border:1px solid rgba(210,153,34,0.25);color:#ffd479;}
+  .notif-empty{padding:18px;text-align:center;color:var(--muted);font-size:0.8rem;}
+
+  main{max-width:1100px;margin:0 auto;padding:22px 18px;}
+  .flash{padding:10px 15px;border-radius:9px;margin-bottom:14px;font-size:0.85rem;animation:slideDown 0.3s ease;}
+  .flash.success{background:var(--green-dim);border:1px solid var(--green);color:var(--green);}
+  .flash.error{background:var(--yellow-dim);border:1px solid var(--yellow);color:var(--yellow);}
+  @keyframes slideDown{from{opacity:0;transform:translateY(-8px);}to{opacity:1;transform:translateY(0);}}
+  @keyframes fadeUp{from{opacity:0;transform:translateY(-6px);}to{opacity:1;transform:translateY(0);}}
+
+  /* ── Stats ── */
+  .stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:22px;}
+  .stat-card{background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:14px 18px;transition:transform 0.2s;}
+  .stat-card:hover{transform:translateY(-2px);}
+  .stat-label{font-size:0.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:5px;}
+  .stat-value{font-family:'Syne',sans-serif;font-size:1.75rem;font-weight:700;}
+  .stat-value.accent{color:var(--accent);}.stat-value.green{color:var(--green);}
+  .stat-value.yellow{color:var(--yellow);}.stat-value.red{color:var(--red);}
+
+  /* ── Layout ── */
+  .layout{display:grid;grid-template-columns:330px 1fr;gap:20px;align-items:start;}
+  .sidebar{display:flex;flex-direction:column;gap:13px;position:sticky;top:72px;}
+
+  /* ── Tab switcher ── */
+  .tab-switch{display:flex;background:var(--surface2);border-radius:10px;padding:4px;gap:3px;margin-bottom:16px;}
+  .tab-btn{flex:1;padding:8px;border:none;border-radius:7px;background:none;color:var(--muted);font-family:'DM Sans',sans-serif;font-size:0.8rem;font-weight:500;cursor:pointer;transition:all 0.2s;display:flex;align-items:center;justify-content:center;gap:5px;}
+  .tab-btn.active{background:var(--surface);color:var(--text);box-shadow:0 1px 4px rgba(0,0,0,0.3);}
+
+  .form-card{background:var(--surface);border:1px solid var(--border);border-radius:15px;padding:18px 20px;}
+  .form-title{font-family:'Syne',sans-serif;font-size:0.92rem;font-weight:700;margin-bottom:14px;}
+  .form-group{margin-bottom:12px;}
+  label{display:block;font-size:0.7rem;color:var(--muted);margin-bottom:5px;text-transform:uppercase;letter-spacing:0.05em;}
+  select,input[type="text"],input[type="number"]{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:9px 12px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:0.86rem;outline:none;transition:border-color 0.2s;}
+  select:focus,input:focus{border-color:var(--accent);}
+  select option{background:var(--surface2);}
+
+  /* ── Barcode section ── */
+  .barcode-section{display:none;}
+  .barcode-section.active{display:block;}
+  .manual-section{display:none;}
+  .manual-section.active{display:block;}
+
+  /* Camera box */
+  .camera-box{background:#000;border:2px dashed var(--border);border-radius:12px;overflow:hidden;position:relative;margin-bottom:12px;min-height:200px;}
+  #quagga-scanner{position:relative;width:100%;}
+  #quagga-scanner video{width:100%;display:block;border-radius:10px;}
+  #quagga-scanner canvas.drawingBuffer{position:absolute;top:0;left:0;width:100%!important;height:100%!important;}
+  #camera-video{width:100%;display:none;border-radius:10px;}
+  .camera-placeholder{padding:28px 16px;text-align:center;color:var(--muted);}
+  .camera-placeholder .cam-icon{font-size:2.2rem;margin-bottom:8px;}
+  .camera-placeholder p{font-size:0.8rem;line-height:1.5;}
+  .scan-line{position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,transparent,var(--accent),transparent);animation:scanAnim 2s linear infinite;display:none;}
+  @keyframes scanAnim{0%{top:0%;}100%{top:95%;}}
+  .cam-controls{display:flex;gap:8px;margin-bottom:12px;}
+
+  /* Barcode result box */
+  .barcode-result{background:var(--green-dim);border:1px solid var(--green);border-radius:9px;padding:11px 14px;font-size:0.83rem;color:var(--green);display:none;margin-bottom:12px;line-height:1.7;}
+  .barcode-result strong{font-family:'Syne',sans-serif;font-size:0.95rem;color:#7ee787;}
+  .barcode-not-found{background:var(--yellow-dim);border:1px solid var(--yellow);border-radius:9px;padding:11px 14px;font-size:0.82rem;color:var(--yellow);display:none;margin-bottom:12px;}
+
+  /* Manual barcode input */
+  .barcode-manual-wrap{display:flex;gap:7px;margin-bottom:12px;}
+  .barcode-manual-wrap input{flex:1;}
+  .btn-lookup{background:var(--accent);border:none;border-radius:8px;color:white;padding:9px 13px;font-size:0.8rem;font-family:'Syne',sans-serif;font-weight:600;cursor:pointer;white-space:nowrap;transition:opacity 0.2s;}
+  .btn-lookup:hover{opacity:0.85;}
+
+  /* Expiry preview */
+  .expiry-info{background:var(--accent-dim);border:1px solid rgba(88,166,255,0.35);border-radius:8px;padding:10px 13px;font-size:0.8rem;color:var(--accent);display:none;margin-bottom:12px;line-height:1.7;}
+  .expiry-info strong{font-family:'Syne',sans-serif;}
+
+  .btn-primary{width:100%;padding:10px;background:linear-gradient(135deg,var(--accent),#1f6feb);border:none;border-radius:8px;color:white;font-family:'Syne',sans-serif;font-size:0.86rem;font-weight:700;cursor:pointer;transition:opacity 0.2s,transform 0.1s;}
+  .btn-primary:hover{opacity:0.88;transform:translateY(-1px);}
+  .btn-green{width:100%;padding:10px;background:linear-gradient(135deg,var(--green),#238636);border:none;border-radius:8px;color:white;font-family:'Syne',sans-serif;font-size:0.86rem;font-weight:700;cursor:pointer;transition:opacity 0.2s,transform 0.1s;}
+  .btn-green:hover{opacity:0.88;transform:translateY(-1px);}
+  .btn-sm-cam{flex:1;padding:9px;border:1px solid var(--border);border-radius:8px;background:var(--surface2);color:var(--text);font-family:'DM Sans',sans-serif;font-size:0.8rem;cursor:pointer;transition:all 0.2s;display:flex;align-items:center;justify-content:center;gap:5px;}
+  .btn-sm-cam:hover{border-color:var(--accent);color:var(--accent);}
+  .btn-sm-cam.active-cam{border-color:var(--red);color:var(--red);background:var(--red-dim);}
+
+  /* Custom item card */
+  .custom-card{background:var(--surface);border:1px solid var(--purple);border-radius:15px;overflow:hidden;}
+  .custom-header{padding:12px 17px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;user-select:none;}
+  .custom-header:hover{background:var(--purple-dim);}
+  .custom-title{font-family:'Syne',sans-serif;font-size:0.86rem;font-weight:700;color:var(--purple);}
+  .arrow{color:var(--purple);transition:transform 0.3s;font-size:0.72rem;}
+  .arrow.open{transform:rotate(180deg);}
+  .custom-body{padding:0 17px;max-height:0;overflow:hidden;transition:max-height 0.35s ease,padding 0.3s;}
+  .custom-body.open{max-height:400px;padding:4px 17px 16px;}
+  .btn-purple{width:100%;padding:10px;background:linear-gradient(135deg,var(--purple),#7c3aed);border:none;border-radius:8px;color:white;font-family:'Syne',sans-serif;font-size:0.86rem;font-weight:700;cursor:pointer;transition:opacity 0.2s,transform 0.1s;margin-top:4px;}
+  .btn-purple:hover{opacity:0.88;transform:translateY(-1px);}
+
+  /* ── Items panel ── */
+  .items-panel{display:flex;flex-direction:column;gap:12px;}
+  .filters{display:flex;gap:7px;flex-wrap:wrap;align-items:center;}
+  .search-wrap{flex:1;min-width:150px;position:relative;}
+  .search-wrap input{padding-left:30px;}
+  .search-icon{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:0.75rem;}
+  .filter-btn{padding:7px 12px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--muted);font-family:'DM Sans',sans-serif;font-size:0.76rem;cursor:pointer;text-decoration:none;transition:all 0.2s;white-space:nowrap;display:inline-block;}
+  .filter-btn:hover,.filter-btn.active{border-color:var(--accent);color:var(--accent);background:var(--accent-dim);}
+
+  .alert-banner{background:var(--yellow-dim);border:1px solid var(--yellow);border-radius:13px;padding:13px 17px;}
+  .alert-title{font-family:'Syne',sans-serif;font-size:0.68rem;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:var(--yellow);margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid rgba(210,153,34,0.25);}
+  .mini-row{display:flex;align-items:center;gap:9px;padding:5px 0;border-bottom:1px solid rgba(210,153,34,0.1);font-size:0.82rem;}
+  .mini-row:last-child{border-bottom:none;}
+
+  .item-card{background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:13px 16px;display:flex;align-items:center;gap:12px;transition:transform 0.2s,box-shadow 0.2s;animation:fadeUp 0.3s ease;}
+  .item-card:hover{transform:translateY(-2px);box-shadow:0 4px 16px rgba(0,0,0,0.3);}
+  .item-card.expired{border-left:3px solid var(--red);}
+  .item-card.expiring{border-left:3px solid var(--yellow);}
+  .item-card.fresh{border-left:3px solid var(--green);}
+  .item-emoji{font-size:1.4rem;width:40px;height:40px;display:grid;place-items:center;background:var(--surface2);border-radius:10px;flex-shrink:0;}
+  .item-info{flex:1;min-width:0;}
+  .item-name{font-family:'Syne',sans-serif;font-weight:600;font-size:0.9rem;margin-bottom:3px;}
+  .item-meta{font-size:0.7rem;color:var(--muted);display:flex;gap:8px;flex-wrap:wrap;}
+  .item-right{display:flex;flex-direction:column;align-items:flex-end;gap:5px;flex-shrink:0;}
+  .badge{padding:2px 9px;border-radius:20px;font-size:0.66rem;font-weight:500;}
+  .badge.fresh{background:var(--green-dim);color:var(--green);}
+  .badge.expiring{background:var(--yellow-dim);color:var(--yellow);}
+  .badge.expired{background:var(--red-dim);color:var(--red);}
+  .days-text{font-family:'Syne',sans-serif;font-size:0.88rem;font-weight:700;}
+  .days-text.green{color:var(--green);}.days-text.yellow{color:var(--yellow);}.days-text.red{color:var(--red);}
+  .card-btns{display:flex;gap:5px;}
+  .btn-sm{background:none;border:1px solid var(--border);border-radius:6px;color:var(--muted);padding:3px 8px;cursor:pointer;font-size:0.68rem;transition:all 0.2s;text-decoration:none;display:inline-block;}
+  .btn-sm:hover{border-color:var(--red);color:var(--red);background:var(--red-dim);}
+  .btn-recipe{border-color:var(--orange)!important;color:var(--orange)!important;}
+  .btn-recipe:hover{background:var(--orange-dim)!important;}
+  .empty-state{text-align:center;padding:50px 20px;color:var(--muted);}
+  .empty-state .icon{font-size:2.5rem;margin-bottom:12px;}
+
+  /* ── Recipe Modal ── */
+  .overlay{position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:400;display:none;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(4px);}
+  .overlay.open{display:flex;}
+  .modal{background:var(--surface);border:1px solid var(--border);border-radius:18px;width:100%;max-width:450px;animation:modalIn 0.22s ease;overflow:hidden;}
+  @keyframes modalIn{from{opacity:0;transform:scale(0.94);}to{opacity:1;transform:scale(1);}}
+  .modal-head{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;justify-content:space-between;}
+  .modal-title{font-family:'Syne',sans-serif;font-size:0.95rem;font-weight:700;}
+  .modal-sub{font-size:0.73rem;color:var(--muted);margin-top:2px;}
+  .modal-close{background:none;border:none;color:var(--muted);font-size:1.1rem;cursor:pointer;}
+  .modal-close:hover{color:var(--text);}
+  .modal-body{padding:16px 20px;}
+  .recipe-grid{display:flex;flex-direction:column;gap:8px;}
+  .recipe-row{background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:11px 14px;display:flex;align-items:center;gap:10px;transition:border-color 0.2s,transform 0.15s;}
+  .recipe-row:hover{border-color:var(--orange);transform:translateX(3px);}
+  .rnum{font-family:'Syne',sans-serif;font-size:0.75rem;font-weight:700;color:var(--orange);width:20px;flex-shrink:0;}
+  .rname{font-size:0.86rem;}
+  .modal-foot{padding:11px 20px;border-top:1px solid var(--border);text-align:center;font-size:0.7rem;color:var(--muted);}
+
+  @media(max-width:768px){
+    .stats-row{grid-template-columns:repeat(2,1fr);}
+    .layout{grid-template-columns:1fr;}
+    .sidebar{position:static;}
+    .notif-panel{width:calc(100vw - 32px);right:16px;}
+  }
+</style>
+</head>
+<body>
+
+<!-- Notification Panel -->
+<div class="notif-panel" id="notif-panel">
+  <div class="notif-head">
+    🔔 Notifications
+    <span class="notif-close" onclick="closeNotif()">Close ✕</span>
+  </div>
+  <div class="notif-list">
+    {% if notifications %}
+      {% for n in notifications %}
+        <div class="notif-item {{ n.type }}">{{ n.msg }}</div>
+      {% endfor %}
+    {% else %}
+      <div class="notif-empty">🎉 All items are fresh! No alerts.</div>
+    {% endif %}
+  </div>
+</div>
+
+<header>
+  <div class="logo"><div class="logo-icon">🥦</div>FreshGuard</div>
+  <div class="header-right">
+    <div class="notif-bell" onclick="toggleNotif()">
+      🔔
+      {% if notifications %}<div class="notif-badge">{{ notifications|length }}</div>{% endif %}
+    </div>
+    <div class="user-pill">👤 {{ user_name }} · 📧 {{ user_email }}</div>
+    <a href="/logout" class="logout-btn">Logout</a>
+  </div>
+</header>
+
+<main>
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}
+      <div class="flash {{ category }}">{{ message }}</div>
+    {% endfor %}
+  {% endwith %}
+
+  <!-- Stats -->
+  <div class="stats-row">
+    <div class="stat-card"><div class="stat-label">Total Items</div><div class="stat-value accent">{{ stats.total }}</div></div>
+    <div class="stat-card"><div class="stat-label">Fresh</div><div class="stat-value green">{{ stats.fresh }}</div></div>
+    <div class="stat-card"><div class="stat-label">Expiring Soon</div><div class="stat-value yellow">{{ stats.expiring }}</div></div>
+    <div class="stat-card"><div class="stat-label">Expired</div><div class="stat-value red">{{ stats.expired }}</div></div>
+  </div>
+
+  <div class="layout">
+    <div class="sidebar">
+
+      <!-- ══ ADD ITEM CARD ══ -->
+      <div class="form-card">
+        <div class="form-title">➕ Add Grocery Item</div>
+
+        <!-- Tab Switch: Barcode | Manual -->
+        <div class="tab-switch">
+          <button class="tab-btn active" id="tab-barcode" onclick="switchTab('barcode')">📷 Scan Barcode</button>
+          <button class="tab-btn" id="tab-manual" onclick="switchTab('manual')">📋 Select Manually</button>
+        </div>
+
+        <!-- ── BARCODE TAB ── -->
+        <div class="barcode-section active" id="barcode-section">
+
+          <!-- Camera box (QuaggaJS renders inside #quagga-scanner) -->
+          <div class="camera-box" id="camera-box">
+            <div class="camera-placeholder" id="cam-placeholder">
+              <div class="cam-icon">📷</div>
+              <p>Click <strong>Start Camera</strong> to scan a barcode<br/>or type the barcode number below</p>
+            </div>
+            <div id="quagga-scanner" style="display:none;position:relative;"></div>
+            <div class="scan-line" id="scan-line"></div>
+          </div>
+
+          <!-- Camera controls -->
+          <div class="cam-controls">
+            <button class="btn-sm-cam" id="btn-start-cam" onclick="startCamera()">📷 Start Camera</button>
+            <button class="btn-sm-cam" id="btn-stop-cam" onclick="stopCamera()" style="display:none;">⏹ Stop</button>
+          </div>
+
+          <!-- Manual barcode input -->
+          <label>Or Type Barcode Number</label>
+          <div class="barcode-manual-wrap">
+            <input type="text" id="barcode-input" placeholder="e.g. 8901030784439" maxlength="20"
+              onkeydown="if(event.key==='Enter'){lookupBarcode();}"/>
+            <button class="btn-lookup" onclick="lookupBarcode()">🔍 Lookup</button>
+          </div>
+
+          <!-- Result boxes -->
+          <div class="barcode-result" id="barcode-result">
+            ✅ Product found!<br/>
+            <strong id="result-name">—</strong><br/>
+            <span id="result-category" style="font-size:0.75rem;opacity:0.85;"></span><br/>
+            <span id="result-shelf" style="font-size:0.75rem;opacity:0.85;"></span>
+          </div>
+          <div class="barcode-not-found" id="barcode-not-found">
+            ⚠️ Product not found in database.<br/>
+            <span style="font-size:0.75rem;">Switch to <strong>Select Manually</strong> tab to add this item.</span>
+          </div>
+
+          <!-- Barcode form (shown after successful scan) -->
+          <form method="POST" action="/add" id="barcode-form" style="display:none;">
+            <input type="hidden" name="item_name" id="bc-item-name"/>
+            <input type="hidden" name="category" id="bc-category"/>
+            <div class="form-group">
+              <label>Storage Location</label>
+              <select name="location" required>
+                {% for loc, icon in location_icon.items() %}
+                  <option value="{{ loc }}">{{ icon }} {{ loc }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Quantity <span style="opacity:0.5;font-size:0.62rem;">(optional)</span></label>
+              <input type="text" name="quantity" placeholder="e.g. 1 pack, 500g"/>
+            </div>
+            <button type="submit" class="btn-green">✅ Add Scanned Item</button>
+          </form>
+        </div>
+
+        <!-- ── MANUAL TAB ── -->
+        <div class="manual-section" id="manual-section">
+          <form method="POST" action="/add">
+            <div class="form-group">
+              <label>Category</label>
+              <select name="category" id="cat-sel" onchange="loadItems()" required>
+                <option value="">-- Select Category --</option>
+                {% for cat in grocery_items %}
+                  <option value="{{ cat }}">{{ category_emoji.get(cat,'📦') }} {{ cat }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Item</label>
+              <select name="item_name" id="item-sel" onchange="showInfo()" required>
+                <option value="">-- Select Category First --</option>
+              </select>
+            </div>
+
+            <!-- Auto expiry preview -->
+            <div class="expiry-info" id="expiry-info">
+              🧮 Will expire on: <strong id="expiry-date-txt">—</strong><br/>
+              <span id="shelf-txt" style="font-size:0.73rem;opacity:0.85;"></span>
+            </div>
+
+            <div class="form-group">
+              <label>Storage Location</label>
+              <select name="location" required>
+                {% for loc, icon in location_icon.items() %}
+                  <option value="{{ loc }}">{{ icon }} {{ loc }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Quantity <span style="opacity:0.5;font-size:0.62rem;">(optional)</span></label>
+              <input type="text" name="quantity" placeholder="e.g. 1kg, 2 packs"/>
+            </div>
+            <button type="submit" class="btn-primary">Add to Tracker</button>
+          </form>
+        </div>
+
+      </div><!-- /form-card -->
+
+      <!-- Add Barcode to Database -->
+      <div class="custom-card" style="border-color:var(--accent);">
+        <div class="custom-header" onclick="toggleBarcodeDB()" style="border-color:var(--accent);">
+          <div class="custom-title" style="color:var(--accent);">📦 Add Product Barcode</div>
+          <span class="arrow" id="barcode-db-arrow" style="color:var(--accent);">▼</span>
+        </div>
+        <div class="custom-body" id="barcode-db-body">
+          <p style="font-size:0.75rem;color:var(--muted);margin:6px 0 12px;">
+            Product not found when scanning? Add it here once — it will be saved permanently and work every time you scan it.
+          </p>
+          <form method="POST" action="/add-barcode">
+            <div class="form-group">
+              <label>Barcode Number</label>
+              <input type="text" name="barcode" id="db-barcode-input" placeholder="e.g. 8901063510012" required/>
+              <div style="font-size:0.68rem;color:var(--muted);margin-top:3px;">
+                The number printed below the barcode on the packet
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Product Name</label>
+              <input type="text" name="product_name" placeholder="e.g. Amul Taaza Milk" required/>
+            </div>
+            <div class="form-group">
+              <label>Category</label>
+              <select name="category">
+                {% for cat in grocery_items %}
+                  <option value="{{ cat }}">{{ category_emoji.get(cat,'📦') }} {{ cat }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <button type="submit" class="btn-primary" style="background:linear-gradient(135deg,var(--accent),#1f6feb);">
+              💾 Save to Barcode Database
+            </button>
+          </form>
+        </div>
+      </div>
+
+      <!-- Add Missing Item -->
+      <div class="custom-card">
+        <div class="custom-header" onclick="toggleCustom()">
+          <div class="custom-title">⭐ Add Missing Item</div>
+          <span class="arrow" id="arrow">▼</span>
+        </div>
+        <div class="custom-body" id="custom-body">
+          <form method="POST" action="/add-custom-item">
+            <div class="form-group" style="margin-top:6px;">
+              <label>Item Name</label>
+              <input type="text" name="custom_name" placeholder="e.g. Tofu, Kefir..." required/>
+            </div>
+            <div class="form-group">
+              <label>Category</label>
+              <select name="custom_category">
+                {% for cat in grocery_items %}
+                  <option value="{{ cat }}">{{ category_emoji.get(cat,'📦') }} {{ cat }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Shelf Life (days)</label>
+              <input type="number" name="custom_shelf_life" placeholder="e.g. 7" min="1" max="3650" required/>
+              <div style="font-size:0.67rem;color:var(--muted);margin-top:3px;">How many days does it stay fresh?</div>
+            </div>
+            <button type="submit" class="btn-purple">Save Item ⭐</button>
+          </form>
+        </div>
+      </div>
+
+    </div><!-- /sidebar -->
+
+    <!-- ── ITEMS LIST ── -->
+    <div class="items-panel">
+      <form method="GET" action="/" style="display:contents;">
+        <div class="filters">
+          <div class="search-wrap">
+            <span class="search-icon">🔍</span>
+            <input type="text" name="search" value="{{ search }}" placeholder="Search items..." onchange="this.form.submit()"/>
+          </div>
+          <a href="/?filter=all" class="filter-btn {% if filter_status=='all' %}active{% endif %}">All</a>
+          <a href="/?filter=fresh" class="filter-btn {% if filter_status=='fresh' %}active{% endif %}">✅ Fresh</a>
+          <a href="/?filter=expiring" class="filter-btn {% if filter_status=='expiring' %}active{% endif %}">⏰ Expiring</a>
+          <a href="/?filter=expired" class="filter-btn {% if filter_status=='expired' %}active{% endif %}">⛔ Expired</a>
+        </div>
+      </form>
+
+      {% if expiring_soon and filter_status == 'all' and not search %}
+      <div class="alert-banner">
+        <div class="alert-title">⚠️ Use These Soon — Expiring Within 3 Days</div>
+        {% for item in expiring_soon %}
+        <div class="mini-row">
+          <span>{{ item.emoji }}</span>
+          <span style="flex:1;font-weight:500;">{{ item.name }}</span>
+          <button class="btn-sm btn-recipe" onclick="openRecipes('{{ item.name }}')">🍳 Recipes</button>
+          <span style="color:var(--yellow);font-size:0.72rem;min-width:50px;text-align:right;">
+            {% if item.days == 0 %}Today!{% else %}{{ item.days }}d left{% endif %}
+          </span>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      {% if items %}
+        {% for item in items %}
+        {% set color = 'green' if item.status == 'fresh' else 'yellow' if item.status == 'expiring' else 'red' %}
+        <div class="item-card {{ item.status }}">
+          <div class="item-emoji">{{ item.emoji }}</div>
+          <div class="item-info">
+            <div class="item-name">{{ item.name }}</div>
+            <div class="item-meta">
+              <span>{{ location_icon[item.location] }} {{ item.location }}</span>
+              <span>📅 Added: {{ item.added }}</span>
+              <span>🗓 Shelf life: {{ item.get('shelf_life','?') }}d</span>
+              {% if item.quantity %}<span>📦 {{ item.quantity }}</span>{% endif %}
+            </div>
+          </div>
+          <div class="item-right">
+            <div class="badge {{ item.status }}">
+              {% if item.status == 'expired' %}⛔ Expired
+              {% elif item.status == 'expiring' %}⏰ Soon
+              {% else %}✅ Fresh{% endif %}
+            </div>
+            <div class="days-text {{ color }}">
+              {% if item.days < 0 %}{{ item.days|abs }}d ago
+              {% elif item.days == 0 %}Today!
+              {% else %}{{ item.days }}d left{% endif %}
+            </div>
+            <div class="card-btns">
+              {% if item.status in ['expiring','expired'] %}
+              <button class="btn-sm btn-recipe" onclick="openRecipes('{{ item.name }}')">🍳</button>
+              {% endif %}
+              <a href="/delete/{{ item.id }}" class="btn-sm" onclick="return confirm('Mark {{ item.name }} as used?')">✓ Used</a>
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      {% else %}
+        <div class="empty-state">
+          <div class="icon">🛒</div>
+          <p>No items here.<br/>Scan a barcode or select an item to get started!</p>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+</main>
+
+<!-- Recipe Modal -->
+<div class="overlay" id="overlay" onclick="closeOnOverlay(event)">
+  <div class="modal">
+    <div class="modal-head">
+      <div>
+        <div class="modal-title" id="modal-title">🍳 Recipe Suggestions</div>
+        <div class="modal-sub">Use this item before it expires!</div>
+      </div>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="recipe-loading" style="text-align:center;color:var(--muted);padding:18px;font-size:0.85rem;">Loading recipes...</div>
+      <div class="recipe-grid" id="recipe-grid" style="display:none;"></div>
+    </div>
+    <div class="modal-foot">💡 Quick ideas to help you use this item before it goes to waste.</div>
+  </div>
+</div>
+
+<script>
+  const shelfLifeMap = {{ shelf_life_map | tojson }};
+  const groceryItems = {{ grocery_items | tojson }};
+  let cameraActive = false;
+  let quaggaRunning = false;
+
+  // ── Tab switching ──────────────────────────────────────────────────────────
+  function switchTab(tab) {
+    document.getElementById('barcode-section').classList.toggle('active', tab === 'barcode');
+    document.getElementById('manual-section').classList.toggle('active', tab === 'manual');
+    document.getElementById('tab-barcode').classList.toggle('active', tab === 'barcode');
+    document.getElementById('tab-manual').classList.toggle('active', tab === 'manual');
+    if (tab === 'manual') stopCamera();
+  }
+
+  // ── Camera barcode scanning using QuaggaJS ────────────────────────────────
+  // scanComplete = true from the moment ONE valid read fires until user starts
+  // the camera again. This survives stopCamera() and any lingering Quagga callbacks.
+  let scanComplete  = false;
+  // candidateCounts = vote-accumulator: only accept a code seen N times in a row
+  let candidateCounts = {};
+
+  function startCamera() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      showScanMsg('error', '❌ Browser does not support camera. Type barcode manually.');
+      return;
+    }
+
+    // Full reset every time camera starts
+    scanComplete    = false;
+    candidateCounts = {};
+    document.getElementById('barcode-result').style.display = 'none';
+    document.getElementById('barcode-not-found').style.display = 'none';
+    document.getElementById('barcode-form').style.display = 'none';
+    document.getElementById('barcode-input').value = '';
+
+    document.getElementById('cam-placeholder').style.display = 'none';
+    document.getElementById('quagga-scanner').style.display = 'block';
+    document.getElementById('scan-line').style.display = 'block';
+    document.getElementById('btn-start-cam').style.display = 'none';
+    document.getElementById('btn-stop-cam').style.display = 'flex';
+    cameraActive = true;
+
+    Quagga.init({
+      inputStream: {
+        type: 'LiveStream',
+        target: document.getElementById('quagga-scanner'),
+        constraints: {
+          facingMode: 'environment',
+          width:  { min: 640, ideal: 1280, max: 1920 },
+          height: { min: 480, ideal: 720,  max: 1080 },
+        },
+        area: {   // only scan centre 80% of frame — reduces edge noise
+          top: '10%', right: '10%', bottom: '10%', left: '10%'
+        }
+      },
+      frequency: 10,   // 10 fps — enough for grocery barcodes, less noise
+      decoder: {
+        readers: [
+          'ean_reader',       // EAN-13 — most Indian/global grocery products
+          'ean_8_reader',     // EAN-8 — small pack barcodes
+          'upc_reader',       // UPC-A — US products
+          'upc_e_reader',     // UPC-E compact
+          'code_128_reader',  // Code 128 — logistics/retail
+        ],
+        multiple: false,
+        debug: { drawBoundingBox: true, showFrequency: false,
+                 drawScanline: true, showPattern: true }
+      },
+      locator: {
+        patchSize: 'medium',
+        halfSample: true
+      },
+      numOfWorkers: 2,
+      locate: true
+    }, function(err) {
+      if (err) {
+        stopCamera();
+        showScanMsg('error', '❌ Camera error: ' + err.message + '. Please type barcode manually.');
+        return;
+      }
+      Quagga.start();
+      quaggaRunning = true;
+
+      // Make video fill the box properly
+      setTimeout(() => {
+        const video  = document.querySelector('#quagga-scanner video');
+        const canvas = document.querySelector('#quagga-scanner canvas');
+        if (video)  { video.style.cssText  = 'width:100%;border-radius:10px;display:block;'; }
+        if (canvas) { canvas.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;'; }
+      }, 500);
+    });
+
+    // Draw overlay boxes during scanning (visual feedback only)
+    Quagga.onProcessed(function(result) {
+      if (scanComplete) return;   // don't paint after we've locked in
+      try {
+        const ctx    = Quagga.canvas.ctx.overlay;
+        const canvas = Quagga.canvas.dom.overlay;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        if (result && result.boxes) {
+          result.boxes.filter(b => b !== result.box).forEach(box => {
+            Quagga.ImageDebug.drawPath(box, { x: 0, y: 1 }, ctx,
+              { color: 'rgba(255,165,0,0.35)', lineWidth: 2 });
+          });
+        }
+        if (result && result.box) {
+          Quagga.ImageDebug.drawPath(result.box, { x: 0, y: 1 }, ctx,
+            { color: '#58a6ff', lineWidth: 3 });
+        }
+        if (result && result.codeResult && result.codeResult.code) {
+          Quagga.ImageDebug.drawPath(result.line, { x: 'x', y: 'y' }, ctx,
+            { color: '#3fb950', lineWidth: 4 });
+        }
+      } catch(e) {}
+    });
+
+    // ── Detection handler — vote-based confidence ─────────────────────────
+    Quagga.onDetected(function(result) {
+      // Hard gate: if we already committed to a scan, ignore everything else
+      if (scanComplete) return;
+
+      const code   = (result.codeResult.code || '').trim();
+      const format = result.codeResult.format || '';
+
+      // ── Quality filters ───────────────────────────────────────────────────
+      // 1. Must have a code
+      if (!code) return;
+
+      // 2. Length gate per format:
+      //    EAN-13 / UPC-A = 13 or 12 digits, EAN-8 = 8 digits,
+      //    UPC-E = 6-8, Code128 = 6+
+      const len = code.length;
+      if (format === 'ean_13'    && len !== 13) return;
+      if (format === 'ean_8'     && len !== 8)  return;
+      if (format === 'upc_a'     && len !== 12) return;
+      if (format === 'upc_e'     && (len < 6 || len > 8)) return;
+      if (format === 'code_128'  && len < 6)    return;
+      // Generic fallback: ignore anything under 8 chars
+      if (len < 8) return;
+
+      // 3. Low error rate (tight threshold)
+      const errors = (result.codeResult.decodedCodes || [])
+        .filter(c => c.error !== undefined)
+        .map(c => c.error);
+      const avgError = errors.length
+        ? errors.reduce((a, b) => a + b, 0) / errors.length
+        : 1;
+      if (avgError > 0.18) return;
+
+      // ── Vote accumulator: require same code seen 3 times ─────────────────
+      candidateCounts[code] = (candidateCounts[code] || 0) + 1;
+      if (candidateCounts[code] < 3) return;   // not confident enough yet
+
+      // ── Commit ────────────────────────────────────────────────────────────
+      scanComplete = true;   // set BEFORE stopCamera so no more callbacks fire
+
+      // Kill camera first, then process — prevents any further onDetected calls
+      stopCamera();
+
+      // Feedback
+      if (navigator.vibrate) navigator.vibrate([80, 40, 80]);
+      try {
+        const actx = new AudioContext();
+        const osc  = actx.createOscillator();
+        osc.connect(actx.destination);
+        osc.frequency.value = 1046;   // higher-pitched, clean beep
+        osc.start();
+        osc.stop(actx.currentTime + 0.12);
+      } catch(e) {}
+
+      // Show result
+      document.getElementById('barcode-input').value = code;
+      showScanMsg('found', '✅ Barcode scanned! <strong>' + code + '</strong><br/><span style="font-size:0.75rem;opacity:0.85;">🔍 Looking up product...</span>');
+      lookupBarcode();
+    });
+  }
+
+  function stopCamera() {
+    if (quaggaRunning) {
+      try {
+        Quagga.offDetected();
+        Quagga.offProcessed();
+        Quagga.stop();
+      } catch(e) {}
+      quaggaRunning = false;
+    }
+    // NOTE: do NOT reset scanComplete here — it must stay true until the
+    // user explicitly starts the camera again (done in startCamera above)
+    document.getElementById('quagga-scanner').style.display = 'none';
+    document.getElementById('quagga-scanner').innerHTML = '';
+    document.getElementById('cam-placeholder').style.display = 'block';
+    document.getElementById('scan-line').style.display = 'none';
+    document.getElementById('btn-start-cam').style.display = 'flex';
+    document.getElementById('btn-stop-cam').style.display = 'none';
+    cameraActive = false;
+  }
+
+  // Show coloured message in the result box
+  function showScanMsg(type, html) {
+    const box = document.getElementById('barcode-result');
+    const colors = {
+      found:    { bg:'var(--green-dim)',  border:'var(--green)',  color:'var(--green)'  },
+      scanning: { bg:'var(--accent-dim)', border:'var(--accent)', color:'var(--accent)' },
+      error:    { bg:'var(--yellow-dim)', border:'var(--yellow)', color:'var(--yellow)' },
+    };
+    const c = colors[type] || colors.scanning;
+    box.style.background   = c.bg;
+    box.style.borderColor  = c.border;
+    box.style.color        = c.color;
+    box.innerHTML          = html;
+    box.style.display      = 'block';
+    document.getElementById('barcode-not-found').style.display = 'none';
+  }
+
+  function showNotFound(msg) {
+    document.getElementById('barcode-result').style.display = 'none';
+    const el = document.getElementById('barcode-not-found');
+    el.innerHTML = msg;
+    el.style.display = 'block';
+  }
+
+  // ── Barcode lookup ─────────────────────────────────────────────────────────
+  function lookupBarcode() {
+    const code = document.getElementById('barcode-input').value.trim();
+    if (!code) { alert('Please enter or scan a barcode number.'); return; }
+
+    document.getElementById('barcode-result').style.display = 'none';
+    document.getElementById('barcode-not-found').style.display = 'none';
+    document.getElementById('barcode-form').style.display = 'none';
+
+    // Show loading state
+    const resultBox = document.getElementById('barcode-result');
+    resultBox.style.background = 'var(--accent-dim)';
+    resultBox.style.borderColor = 'var(--accent)';
+    resultBox.style.color = 'var(--accent)';
+    resultBox.innerHTML = '🔍 Looking up barcode...';
+    resultBox.style.display = 'block';
+
+    fetch('/api/barcode?code=' + encodeURIComponent(code))
+      .then(r => r.json())
+      .then(data => {
+        if (data.found) {
+          // Reset styling
+          resultBox.style.background = 'var(--green-dim)';
+          resultBox.style.borderColor = 'var(--green)';
+          resultBox.style.color = 'var(--green)';
+
+          // Format expiry date nicely
+          const expiryRaw = data.expiry_date || '';
+          let expiryDisplay = '';
+          let expiryWarning = '';
+          if (expiryRaw) {
+            const expDate = new Date(expiryRaw);
+            const today = new Date();
+            const daysLeft = Math.round((expDate - today) / (1000*60*60*24));
+            const options = { day: 'numeric', month: 'short', year: 'numeric' };
+            expiryDisplay = expDate.toLocaleDateString('en-IN', options);
+            if (daysLeft <= 3) expiryWarning = '🔴';
+            else if (daysLeft <= 7) expiryWarning = '🟡';
+            else expiryWarning = '🟢';
+          }
+
+          resultBox.innerHTML = `
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+              <span style="font-size:1.2rem;">✅</span>
+              <strong style="font-size:1rem;color:#7ee787;">${data.name}</strong>
+            </div>
+            <div style="font-size:0.78rem;opacity:0.85;margin-bottom:4px;">📂 ${data.category}</div>
+            <div style="background:rgba(0,0,0,0.25);border-radius:7px;padding:8px 10px;margin-top:6px;">
+              <div style="font-size:0.75rem;opacity:0.75;margin-bottom:2px;">ESTIMATED EXPIRY DATE</div>
+              <div style="font-size:1.05rem;font-weight:700;color:#7ee787;letter-spacing:0.5px;">
+                ${expiryWarning} ${expiryDisplay}
+              </div>
+              <div style="font-size:0.72rem;opacity:0.7;margin-top:3px;">
+                (~${data.shelf_days} days shelf life from today)
+              </div>
+            </div>
+            ${data.source === 'openfoodfacts' ? '<div style="font-size:0.7rem;opacity:0.5;margin-top:5px;">🌐 Fetched from Open Food Facts & saved to your database</div>' : ''}
+          `;
+
+          // Fill hidden form
+          document.getElementById('bc-item-name').value = data.name;
+          document.getElementById('bc-category').value = data.category;
+          document.getElementById('barcode-form').style.display = 'block';
+        } else {
+          resultBox.style.display = 'none';
+          const nf = document.getElementById('barcode-not-found');
+          nf.innerHTML = `
+            <div style="margin-bottom:8px;">⚠️ <strong>Barcode not found:</strong> <code style="background:rgba(255,255,255,0.1);padding:2px 6px;border-radius:4px;">${code}</code></div>
+            <div style="font-size:0.78rem;opacity:0.8;margin-bottom:10px;">Add it below — it will be saved permanently and recognized every time you scan it.</div>
+            <div style="display:flex;flex-direction:column;gap:7px;">
+              <input type="text" id="inline-product-name" placeholder="Product name (e.g. Amul Taaza Milk)"
+                style="background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.2);border-radius:7px;
+                       color:white;padding:8px 10px;font-size:0.82rem;width:100%;box-sizing:border-box;"/>
+              <select id="inline-product-cat"
+                style="background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.2);border-radius:7px;
+                       color:white;padding:8px 10px;font-size:0.82rem;width:100%;">
+                <option value="Other">📦 Select Category</option>
+                <option value="Dairy">🥛 Dairy</option>
+                <option value="Bakery">🍞 Bakery</option>
+                <option value="Beverages">🧃 Beverages</option>
+                <option value="Snacks">🍿 Snacks</option>
+                <option value="Grains & Pulses">🌾 Grains & Pulses</option>
+                <option value="Spices & Herbs">🌶 Spices & Herbs</option>
+                <option value="Condiments & Sauces">🫙 Condiments & Sauces</option>
+                <option value="Flours">🌾 Flours</option>
+                <option value="Frozen">🧊 Frozen</option>
+                <option value="Meat & Seafood">🍗 Meat & Seafood</option>
+              </select>
+              <button onclick="saveUnknownBarcode('${code}')"
+                style="background:var(--accent);border:none;border-radius:7px;color:white;
+                       padding:9px;font-size:0.82rem;cursor:pointer;font-weight:600;">
+                💾 Save &amp; Show Expiry Date
+              </button>
+            </div>
+            <div id="inline-save-result" style="margin-top:8px;font-size:0.78rem;display:none;"></div>
+          `;
+          nf.style.display = 'block';
+        }
+      })
+      .catch(() => {
+        resultBox.style.display = 'none';
+        document.getElementById('barcode-not-found').innerHTML = '❌ Error connecting. Check your internet and try again.';
+        document.getElementById('barcode-not-found').style.display = 'block';
+      });
+  }
+
+  // ── Manual dropdown ────────────────────────────────────────────────────────
+  function loadItems() {
+    const cat = document.getElementById('cat-sel').value;
+    const sel = document.getElementById('item-sel');
+    sel.innerHTML = '<option value="">-- Select Item --</option>';
+    (groceryItems[cat] || []).forEach(item => {
+      const o = document.createElement('option');
+      o.value = item; o.textContent = item;
+      sel.appendChild(o);
+    });
+    document.getElementById('expiry-info').style.display = 'none';
+  }
+
+  function showInfo() {
+    const item = document.getElementById('item-sel').value;
+    const info = document.getElementById('expiry-info');
+    if (!item || !(item in shelfLifeMap)) { info.style.display = 'none'; return; }
+    const days = shelfLifeMap[item];
+    const exp = new Date();
+    exp.setDate(exp.getDate() + days);
+    const expStr = exp.toISOString().split('T')[0];
+    document.getElementById('expiry-date-txt').textContent = expStr;
+    document.getElementById('shelf-txt').textContent = item + ' stays fresh for ~' + days + ' days from today';
+    info.style.display = 'block';
+  }
+
+  // ── Custom form toggle ─────────────────────────────────────────────────────
+  function toggleCustom() {
+    document.getElementById('custom-body').classList.toggle('open');
+    document.getElementById('arrow').classList.toggle('open');
+  }
+
+  function toggleBarcodeDB() {
+    document.getElementById('barcode-db-body').classList.toggle('open');
+    document.getElementById('barcode-db-arrow').classList.toggle('open');
+  }
+
+  // Auto-fill barcode number into the DB form when not found
+  function openAddBarcodeForm(code) {
+    document.getElementById('barcode-db-body').classList.add('open');
+    document.getElementById('barcode-db-arrow').classList.add('open');
+    document.getElementById('db-barcode-input').value = code;
+    document.getElementById('barcode-db-body').scrollIntoView({ behavior: 'smooth' });
+  }
+
+  // ── Inline save unknown barcode & show expiry immediately ─────────────────
+  function saveUnknownBarcode(code) {
+    const name = (document.getElementById('inline-product-name').value || '').trim();
+    const category = document.getElementById('inline-product-cat').value || 'Other';
+    const resultEl = document.getElementById('inline-save-result');
+
+    if (!name) {
+      resultEl.style.display = 'block';
+      resultEl.style.color = '#f0c040';
+      resultEl.textContent = '⚠️ Please enter a product name first.';
+      return;
+    }
+
+    resultEl.style.display = 'block';
+    resultEl.style.color = '#58a6ff';
+    resultEl.textContent = '💾 Saving...';
+
+    fetch('/api/barcode/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ barcode: code, name: name, category: category })
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (data.success) {
+        // Hide the not-found panel and show success in the main result box
+        document.getElementById('barcode-not-found').style.display = 'none';
+        const resultBox = document.getElementById('barcode-result');
+
+        const expiryRaw = data.expiry_date || '';
+        let expiryDisplay = '';
+        let expiryWarning = '🟢';
+        if (expiryRaw) {
+          const expDate = new Date(expiryRaw);
+          const today = new Date();
+          const daysLeft = Math.round((expDate - today) / (1000*60*60*24));
+          const options = { day: 'numeric', month: 'short', year: 'numeric' };
+          expiryDisplay = expDate.toLocaleDateString('en-IN', options);
+          if (daysLeft <= 3) expiryWarning = '🔴';
+          else if (daysLeft <= 7) expiryWarning = '🟡';
+        }
+
+        resultBox.style.background = 'var(--green-dim)';
+        resultBox.style.borderColor = 'var(--green)';
+        resultBox.style.color = 'var(--green)';
+        resultBox.innerHTML = `
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+            <span style="font-size:1.2rem;">✅</span>
+            <strong style="font-size:1rem;color:#7ee787;">${data.name}</strong>
+          </div>
+          <div style="font-size:0.78rem;opacity:0.85;margin-bottom:4px;">📂 ${data.category}</div>
+          <div style="background:rgba(0,0,0,0.25);border-radius:7px;padding:8px 10px;margin-top:6px;">
+            <div style="font-size:0.75rem;opacity:0.75;margin-bottom:2px;">ESTIMATED EXPIRY DATE</div>
+            <div style="font-size:1.05rem;font-weight:700;color:#7ee787;letter-spacing:0.5px;">
+              ${expiryWarning} ${expiryDisplay}
+            </div>
+            <div style="font-size:0.72rem;opacity:0.7;margin-top:3px;">
+              (~${data.shelf_days} days shelf life from today)
+            </div>
+          </div>
+          <div style="font-size:0.7rem;opacity:0.6;margin-top:5px;">🗄️ Saved to database — will be recognized next time you scan it!</div>
+        `;
+        resultBox.style.display = 'block';
+
+        document.getElementById('bc-item-name').value = data.name;
+        document.getElementById('bc-category').value = data.category;
+        document.getElementById('barcode-form').style.display = 'block';
+      } else {
+        resultEl.style.color = '#f0c040';
+        resultEl.textContent = '❌ ' + (data.error || 'Could not save. Please try again.');
+      }
+    })
+    .catch(() => {
+      resultEl.style.color = '#f0c040';
+      resultEl.textContent = '❌ Network error. Please try again.';
+    });
+  }
+
+  // ── Notifications ──────────────────────────────────────────────────────────
+  function toggleNotif() { document.getElementById('notif-panel').classList.toggle('open'); }
+  function closeNotif() { document.getElementById('notif-panel').classList.remove('open'); }
+  document.addEventListener('click', e => {
+    const panel = document.getElementById('notif-panel');
+    if (panel.classList.contains('open') && !panel.contains(e.target) && !e.target.closest('.notif-bell'))
+      closeNotif();
+  });
+
+  // ── Recipes ────────────────────────────────────────────────────────────────
+  function openRecipes(itemName) {
+    document.getElementById('modal-title').textContent = '🍳 Recipes for ' + itemName;
+    document.getElementById('recipe-loading').style.display = 'block';
+    document.getElementById('recipe-grid').style.display = 'none';
+    document.getElementById('overlay').classList.add('open');
+    fetch('/api/recipes?item=' + encodeURIComponent(itemName))
+      .then(r => r.json())
+      .then(data => {
+        document.getElementById('recipe-loading').style.display = 'none';
+        const grid = document.getElementById('recipe-grid');
+        grid.innerHTML = (data.recipes || []).map((r,i) =>
+          `<div class="recipe-row"><div class="rnum">${i+1}</div><div class="rname">${r}</div></div>`
+        ).join('');
+        grid.style.display = 'flex';
+      });
+  }
+  function closeModal() { document.getElementById('overlay').classList.remove('open'); }
+  function closeOnOverlay(e) { if (e.target.id === 'overlay') closeModal(); }
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+  // Auto-open notifications if alerts exist
+  {% if notifications %}
+  window.addEventListener('load', () => setTimeout(() =>
+    document.getElementById('notif-panel').classList.add('open'), 800));
+  {% endif %}
+</script>
+</body>
+</html>

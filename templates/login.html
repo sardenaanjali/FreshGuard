@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>FreshGuard — Login</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+<style>
+  :root{--bg:#0d1117;--surface:#161b22;--surface2:#1c2330;--border:#30363d;--text:#e6edf3;--muted:#7d8590;--green:#3fb950;--green-dim:#1a3a22;--yellow:#d29922;--yellow-dim:#3a2e0a;--accent:#58a6ff;--accent-dim:#0d2347;}
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;
+    background-image:radial-gradient(ellipse at 30% 20%,#0d2347 0%,transparent 55%),radial-gradient(ellipse at 70% 80%,#1a3a22 0%,transparent 55%);}
+  .box{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:38px 36px;width:100%;max-width:420px;box-shadow:0 24px 64px rgba(0,0,0,0.55);}
+  .logo{display:flex;align-items:center;gap:12px;margin-bottom:28px;justify-content:center;}
+  .logo-icon{width:46px;height:46px;background:linear-gradient(135deg,#3fb950,#58a6ff);border-radius:13px;display:grid;place-items:center;font-size:1.4rem;box-shadow:0 4px 16px rgba(88,166,255,0.25);}
+  .logo-text{font-family:'Syne',sans-serif;font-size:1.55rem;font-weight:800;}
+  .page-title{font-family:'Syne',sans-serif;font-size:1.15rem;font-weight:700;text-align:center;margin-bottom:4px;}
+  .page-sub{font-size:0.83rem;color:var(--muted);text-align:center;margin-bottom:26px;}
+  .flash{padding:11px 15px;border-radius:9px;margin-bottom:16px;font-size:0.84rem;line-height:1.5;}
+  .flash.success{background:var(--green-dim);border:1px solid var(--green);color:var(--green);}
+  .flash.error{background:var(--yellow-dim);border:1px solid var(--yellow);color:var(--yellow);}
+  .form-group{margin-bottom:16px;}
+  label{display:block;font-size:0.7rem;color:var(--muted);margin-bottom:5px;text-transform:uppercase;letter-spacing:0.07em;font-weight:500;}
+  .input-wrap{position:relative;}
+  .input-icon{position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:0.95rem;pointer-events:none;}
+  input{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:12px 14px 12px 38px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:0.95rem;outline:none;transition:border-color 0.2s;}
+  input:focus{border-color:var(--accent);}
+  input::placeholder{color:var(--muted);}
+  .hint{font-size:0.71rem;color:var(--muted);margin-top:4px;}
+  .btn-login{width:100%;padding:13px;background:linear-gradient(135deg,var(--accent),#1f6feb);border:none;border-radius:10px;color:white;font-family:'Syne',sans-serif;font-size:1rem;font-weight:700;cursor:pointer;transition:opacity 0.2s,transform 0.1s;margin-top:6px;letter-spacing:0.3px;}
+  .btn-login:hover{opacity:0.88;transform:translateY(-1px);}
+  .divider{display:flex;align-items:center;gap:12px;margin:22px 0;}
+  .divider::before,.divider::after{content:'';flex:1;border-top:1px solid var(--border);}
+  .divider span{font-size:0.75rem;color:var(--muted);white-space:nowrap;}
+  .register-link{display:block;text-align:center;font-size:0.85rem;color:var(--muted);}
+  .register-link a{color:var(--green);text-decoration:none;font-weight:600;}
+  .register-link a:hover{text-decoration:underline;}
+  .features{display:flex;flex-direction:column;gap:9px;margin-top:22px;padding-top:20px;border-top:1px solid var(--border);}
+  .feature{display:flex;align-items:center;gap:10px;font-size:0.8rem;color:var(--muted);}
+  .fi{font-size:0.95rem;width:24px;text-align:center;}
+</style>
+</head>
+<body>
+<div class="box">
+  <div class="logo">
+    <div class="logo-icon">🥦</div>
+    <div class="logo-text">FreshGuard</div>
+  </div>
+  <div class="page-title">Welcome Back</div>
+  <div class="page-sub">Log in with the email you registered with</div>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in messages %}
+      <div class="flash {{ cat }}">{{ msg }}</div>
+    {% endfor %}
+  {% endwith %}
+
+  <form method="POST" action="/login">
+    <div class="form-group">
+      <label>Email Address</label>
+      <div class="input-wrap">
+        <span class="input-icon">📧</span>
+        <input type="email" name="email" id="email-input"
+          placeholder="you@example.com"
+          autocomplete="email" required autofocus/>
+      </div>
+      <div class="hint">Use the email you registered with</div>
+    </div>
+    <button type="submit" class="btn-login">Log In →</button>
+  </form>
+
+  <div class="divider"><span>new to FreshGuard?</span></div>
+  <div class="register-link">
+    <a href="/register">Create a free account →</a>
+  </div>
+
+  <div class="features">
+    <div class="feature"><span class="fi">📷</span><span>Scan barcodes — 500+ Indian grocery products</span></div>
+    <div class="feature"><span class="fi">🗓</span><span>Auto-calculated expiry dates, no manual entry</span></div>
+    <div class="feature"><span class="fi">📧</span><span>Email alerts when items are about to expire</span></div>
+    <div class="feature"><span class="fi">🍳</span><span>Recipe suggestions for expiring items</span></div>
+  </div>
+</div>
+</body>
+</html>

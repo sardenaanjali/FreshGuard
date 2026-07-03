@@ -1,0 +1,72 @@
+[
+  {
+    "id": 1782623957733,
+    "name": "Mushroom",
+    "category": "Vegetables",
+    "added": "2026-06-28",
+    "expiry": "2026-07-03",
+    "shelf_life": 5,
+    "location": "Fridge",
+    "quantity": ""
+  },
+  {
+    "id": 1774452129616,
+    "name": "Grb ghee",
+    "category": "Dairy",
+    "added": "2026-03-25",
+    "expiry": "2026-12-20",
+    "shelf_life": 270,
+    "location": "Fridge",
+    "quantity": ""
+  },
+  {
+    "id": 1774452080281,
+    "name": "Kissan jam",
+    "category": "Condiments & Sauces",
+    "added": "2026-03-25",
+    "expiry": "2026-09-21",
+    "shelf_life": 180,
+    "location": "Fridge",
+    "quantity": ""
+  },
+  {
+    "id": 1774451414206,
+    "name": "Britania marie gold biscuit",
+    "category": "Bakery",
+    "added": "2026-03-25",
+    "expiry": "2026-08-22",
+    "shelf_life": 150,
+    "location": "Pantry",
+    "quantity": ""
+  },
+  {
+    "id": 1774451349143,
+    "name": "PEPSICO.",
+    "category": "Beverages",
+    "added": "2026-03-25",
+    "expiry": "2026-12-20",
+    "shelf_life": 270,
+    "location": "Fridge",
+    "quantity": ""
+  },
+  {
+    "id": 1774451316684,
+    "name": "Haldiram's Aloo Bhujia Sev",
+    "category": "Snacks",
+    "added": "2026-03-25",
+    "expiry": "2026-09-21",
+    "shelf_life": 180,
+    "location": "Pantry",
+    "quantity": ""
+  },
+  {
+    "id": 1774451298984,
+    "name": "Soya sticks",
+    "category": "Snacks",
+    "added": "2026-03-25",
+    "expiry": "2026-09-21",
+    "shelf_life": 180,
+    "location": "Pantry",
+    "quantity": ""
+  }
+]

@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>FreshGuard — Create Account</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+<style>
+  :root{--bg:#0d1117;--surface:#161b22;--surface2:#1c2330;--border:#30363d;--text:#e6edf3;--muted:#7d8590;--green:#3fb950;--green-dim:#1a3a22;--yellow:#d29922;--yellow-dim:#3a2e0a;--red:#f85149;--red-dim:#3d1a19;--accent:#58a6ff;--accent-dim:#0d2347;}
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;
+    background-image:radial-gradient(ellipse at 20% 10%,#0d2347 0%,transparent 50%),radial-gradient(ellipse at 80% 90%,#1a3a22 0%,transparent 50%);}
+  .box{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:38px 36px;width:100%;max-width:430px;box-shadow:0 24px 64px rgba(0,0,0,0.55);}
+  /* Logo */
+  .logo{display:flex;align-items:center;gap:12px;margin-bottom:28px;justify-content:center;}
+  .logo-icon{width:46px;height:46px;background:linear-gradient(135deg,#3fb950,#58a6ff);border-radius:13px;display:grid;place-items:center;font-size:1.4rem;box-shadow:0 4px 16px rgba(63,185,80,0.3);}
+  .logo-text{font-family:'Syne',sans-serif;font-size:1.55rem;font-weight:800;letter-spacing:-0.3px;}
+  /* Heading */
+  .page-title{font-family:'Syne',sans-serif;font-size:1.15rem;font-weight:700;text-align:center;margin-bottom:4px;}
+  .page-sub{font-size:0.83rem;color:var(--muted);text-align:center;margin-bottom:26px;}
+  /* Flash messages */
+  .flash{padding:11px 15px;border-radius:9px;margin-bottom:16px;font-size:0.84rem;line-height:1.5;}
+  .flash.success{background:var(--green-dim);border:1px solid var(--green);color:var(--green);}
+  .flash.error{background:var(--yellow-dim);border:1px solid var(--yellow);color:var(--yellow);}
+  /* Form */
+  .form-group{margin-bottom:15px;}
+  label{display:block;font-size:0.7rem;color:var(--muted);margin-bottom:5px;text-transform:uppercase;letter-spacing:0.07em;font-weight:500;}
+  .input-wrap{position:relative;}
+  .input-icon{position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:0.95rem;pointer-events:none;}
+  .valid-icon{position:absolute;right:12px;top:50%;transform:translateY(-50%);font-size:0.9rem;opacity:0;transition:opacity 0.2s;}
+  input{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:11px 36px 11px 38px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:0.93rem;outline:none;transition:border-color 0.2s;}
+  input:focus{border-color:var(--accent);}
+  input.valid{border-color:var(--green);}
+  input.invalid{border-color:var(--red);}
+  input::placeholder{color:var(--muted);}
+  .field-hint{font-size:0.7rem;color:var(--muted);margin-top:4px;min-height:16px;transition:color 0.2s;}
+  .field-hint.ok{color:var(--green);}
+  .field-hint.err{color:var(--red);}
+  /* Submit */
+  .btn-register{width:100%;padding:13px;background:linear-gradient(135deg,#3fb950,#1a7f37);border:none;border-radius:10px;color:white;font-family:'Syne',sans-serif;font-size:1rem;font-weight:700;cursor:pointer;transition:opacity 0.2s,transform 0.1s;margin-top:6px;letter-spacing:0.3px;}
+  .btn-register:hover{opacity:0.88;transform:translateY(-1px);}
+  .btn-register:disabled{opacity:0.45;cursor:not-allowed;transform:none;}
+  /* Divider + Login link */
+  .divider{display:flex;align-items:center;gap:12px;margin:22px 0;}
+  .divider::before,.divider::after{content:'';flex:1;border-top:1px solid var(--border);}
+  .divider span{font-size:0.75rem;color:var(--muted);white-space:nowrap;}
+  .login-link{display:block;text-align:center;font-size:0.85rem;color:var(--muted);}
+  .login-link a{color:var(--accent);text-decoration:none;font-weight:600;}
+  .login-link a:hover{text-decoration:underline;}
+  /* Features */
+  .features{display:flex;flex-direction:column;gap:9px;margin-top:22px;padding-top:20px;border-top:1px solid var(--border);}
+  .feature{display:flex;align-items:center;gap:10px;font-size:0.8rem;color:var(--muted);}
+  .fi{font-size:0.95rem;width:24px;text-align:center;}
+</style>
+</head>
+<body>
+<div class="box">
+
+  <div class="logo">
+    <div class="logo-icon">🥦</div>
+    <div class="logo-text">FreshGuard</div>
+  </div>
+
+  <div class="page-title">Create Your Account</div>
+  <div class="page-sub">Register once — track groceries & get expiry alerts</div>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in messages %}
+      <div class="flash {{ cat }}">{{ msg }}</div>
+    {% endfor %}
+  {% endwith %}
+
+  <form method="POST" action="/register" id="reg-form" novalidate>
+
+    <!-- Full Name -->
+    <div class="form-group">
+      <label>Full Name</label>
+      <div class="input-wrap">
+        <span class="input-icon">👤</span>
+        <input type="text" name="name" id="f-name"
+          placeholder="e.g. Ravi Kumar"
+          autocomplete="name"
+          oninput="validateName(this.value)" required/>
+        <span class="valid-icon" id="vi-name">✅</span>
+      </div>
+      <div class="field-hint" id="h-name">Your full name as you'd like to be greeted</div>
+    </div>
+
+    <!-- Mobile Number -->
+    <div class="form-group">
+      <label>Mobile Number</label>
+      <div class="input-wrap">
+        <span class="input-icon">📱</span>
+        <input type="tel" name="mobile" id="f-mobile"
+          placeholder="10-digit number (e.g. 9876543210)"
+          maxlength="10"
+          autocomplete="tel"
+          oninput="validateMobile(this.value)" required/>
+        <span class="valid-icon" id="vi-mobile">✅</span>
+      </div>
+      <div class="field-hint" id="h-mobile">10-digit Indian mobile number, no country code</div>
+    </div>
+
+    <!-- Email -->
+    <div class="form-group">
+      <label>Email Address</label>
+      <div class="input-wrap">
+        <span class="input-icon">📧</span>
+        <input type="email" name="email" id="f-email"
+          placeholder="you@example.com"
+          autocomplete="email"
+          oninput="validateEmail(this.value)" required/>
+        <span class="valid-icon" id="vi-email">✅</span>
+      </div>
+      <div class="field-hint" id="h-email">Expiry alert emails will be sent here</div>
+    </div>
+
+    <button type="submit" class="btn-register" id="btn-reg">
+      Create Account →
+    </button>
+
+  </form>
+
+  <div class="divider"><span>already have an account?</span></div>
+  <div class="login-link">
+    <a href="/login">Log in to your account →</a>
+  </div>
+
+  <div class="features">
+    <div class="feature"><span class="fi">📷</span><span>Scan barcodes — 500+ Indian grocery products recognised</span></div>
+    <div class="feature"><span class="fi">🗓</span><span>Auto-calculated expiry dates, no manual entry</span></div>
+    <div class="feature"><span class="fi">📧</span><span>Email alerts when your items are about to expire</span></div>
+    <div class="feature"><span class="fi">🍳</span><span>Recipe suggestions for items expiring soon</span></div>
+  </div>
+
+</div>
+
+<script>
+  const NAME_RE   = /^.{2,}$/;
+  const MOBILE_RE = /^\d{10}$/;
+  const EMAIL_RE  = /^[\w.+-]+@[\w-]+\.[\w.]+$/;
+
+  function setField(id, hintId, viId, ok, okMsg, errMsg) {
+    const inp  = document.getElementById(id);
+    const hint = document.getElementById(hintId);
+    const vi   = document.getElementById(viId);
+    inp.classList.toggle('valid',   ok);
+    inp.classList.toggle('invalid', !ok && inp.value.length > 0);
+    vi.style.opacity = ok ? '1' : '0';
+    if (inp.value.length === 0) {
+      hint.className = 'field-hint';
+      hint.textContent = errMsg;         // neutral placeholder
+    } else if (ok) {
+      hint.className = 'field-hint ok';
+      hint.textContent = okMsg;
+    } else {
+      hint.className = 'field-hint err';
+      hint.textContent = errMsg;
+    }
+    updateSubmit();
+  }
+
+  function validateName(v) {
+    setField('f-name','h-name','vi-name',
+      NAME_RE.test(v.trim()),
+      '✓ Looks good!',
+      'Please enter at least 2 characters');
+  }
+  function validateMobile(v) {
+    // Strip non-digits as user types
+    const digits = v.replace(/\D/g,'');
+    document.getElementById('f-mobile').value = digits;
+    setField('f-mobile','h-mobile','vi-mobile',
+      MOBILE_RE.test(digits),
+      '✓ Valid 10-digit number',
+      'Must be exactly 10 digits, no spaces or dashes');
+  }
+  function validateEmail(v) {
+    const ok = EMAIL_RE.test(v.trim());
+    setField('f-email','h-email','vi-email',
+      ok,
+      '✓ Expiry alerts will go to ' + v.trim(),
+      'Enter a valid email like you@gmail.com');
+  }
+
+  function updateSubmit() {
+    const allOk = document.getElementById('f-name').classList.contains('valid') &&
+                  document.getElementById('f-mobile').classList.contains('valid') &&
+                  document.getElementById('f-email').classList.contains('valid');
+    document.getElementById('btn-reg').disabled = !allOk;
+  }
+
+  // Disable button on page load until all valid
+  document.getElementById('btn-reg').disabled = true;
+</script>
+</body>
+</html>
