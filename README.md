@@ -1,4 +1,4 @@
-# 🥦 FreshGuard v17 — Fixed for Continuous Mobile Use
+#  FreshGuard 
 
 ## ▶️ Terminal Commands
 
